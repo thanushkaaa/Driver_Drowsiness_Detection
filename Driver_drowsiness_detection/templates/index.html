@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Driver Drowsiness Detection System</title>
+    <!-- Google Fonts: Inter & Orbitron -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Alarm Sound -->
+    <audio id="alarm-audio" src="{{ url_for('static', filename='alarm.mp3') }}" loop></audio>
+
+    <!-- Overlay Alert Screen -->
+    <div id="alarm-overlay" class="alarm-overlay">
+        <div class="alarm-overlay-content">
+            <i class="fa-solid fa-triangle-exclamation warning-icon pulse"></i>
+            <h1>DROWSINESS ALERT!</h1>
+            <p>WAKE UP! INATTENTION DETECTED</p>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar / Navigation -->
+        <header class="app-header">
+            <div class="brand">
+                <i class="fa-solid fa-shield-halved brand-logo"></i>
+                <div class="brand-text">
+                    <span class="brand-title">AURA-GUARD</span>
+                    <span class="brand-subtitle">AI Driver Safety System</span>
+                </div>
+            </div>
+            <div class="system-status-indicator">
+                <span class="status-dot green" id="global-status-dot"></span>
+                <span class="status-text" id="global-status-text">SYSTEM READY</span>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <main class="dashboard-grid">
+            <!-- Left Side: Video Feed & Real-time Overlays -->
+            <section class="feed-section">
+                <div class="glass-card feed-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-video"></i> Live Monitor Feed</h2>
+                        <span class="badge badge-neon" id="fps-badge">0 FPS</span>
+                    </div>
+                    <div class="video-container">
+                        <!-- Hidden Video Tag for Webcam -->
+                        <video id="webcam" autoplay playsinline muted></video>
+                        <!-- Visible Canvas for Overlay Bounding Boxes -->
+                        <canvas id="overlay-canvas"></canvas>
+                        <!-- Scanner line animation -->
+                        <div class="scanner-line" id="scanner-line"></div>
+                        <!-- Centered placeholder before camera is active -->
+                        <div class="camera-placeholder" id="camera-placeholder">
+                            <i class="fa-solid fa-camera fa-3x"></i>
+                            <p>Camera Off</p>
+                            <button class="btn btn-primary" id="btn-start-camera">
+                                <i class="fa-solid fa-play"></i> Initialize Camera
+                            </button>
+                        </div>
+                    </div>
+                    <div class="feed-controls">
+                        <button class="btn btn-secondary" id="btn-toggle-camera" disabled>
+                            <i class="fa-solid fa-video-slash"></i> Stop Camera
+                        </button>
+                        <button class="btn btn-secondary" id="btn-toggle-tracking" disabled>
+                            <i class="fa-solid fa-pause"></i> Pause Detector
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Metrics, Gauges & Logs -->
+            <section class="metrics-section">
+                <!-- Stats Row -->
+                <div class="metrics-grid">
+                    <!-- Left Eye Card -->
+                    <div class="glass-card stat-card" id="card-left-eye">
+                        <div class="stat-icon"><i class="fa-solid fa-eye"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Left Eye</span>
+                            <span class="stat-val status-unknown" id="val-left-eye">N/A</span>
+                        </div>
+                    </div>
+                    <!-- Right Eye Card -->
+                    <div class="glass-card stat-card" id="card-right-eye">
+                        <div class="stat-icon"><i class="fa-solid fa-eye"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Right Eye</span>
+                            <span class="stat-val status-unknown" id="val-right-eye">N/A</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drowsiness Level / Gauge Card -->
+                <div class="glass-card gauge-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-gauge-high"></i> Fatigue Level Gauge</h2>
+                    </div>
+                    <div class="gauge-content">
+                        <div class="circular-progress-container">
+                            <div class="circular-progress" id="fatigue-progress">
+                                <div class="progress-inner">
+                                    <span class="progress-percentage" id="fatigue-count">0</span>
+                                    <span class="progress-label" id="fatigue-label">Normal</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="gauge-details">
+                            <p>Consecutive Closed Frames count towards triggering the alarm sound.</p>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="fatigue-bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Card -->
+                <div class="glass-card settings-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-sliders"></i> Adjust Sensitivity</h2>
+                    </div>
+                    <div class="settings-content">
+                        <div class="slider-group">
+                            <div class="slider-labels">
+                                <label for="range-threshold">Alarm Threshold (Frames)</label>
+                                <span class="range-val" id="val-threshold">10</span>
+                            </div>
+                            <input type="range" id="range-threshold" min="5" max="30" value="10">
+                            <span class="slider-desc">Alert triggers when eyes are closed for this many consecutive frames (~2 seconds).</span>
+                        </div>
+                        <div class="toggle-group">
+                            <label class="switch-label" for="switch-sound">
+                                <span>Enable Audible Alarm Sound</span>
+                                <span class="slider-desc">Play siren audio in browser when drowsiness is detected.</span>
+                            </label>
+                            <label class="switch">
+                                <input type="checkbox" id="switch-sound" checked>
+                                <span class="switch-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Log Card -->
+                <div class="glass-card log-card">
+                    <div class="card-header">
+                        <h2><i class="fa-solid fa-list-ul"></i> System Events Log</h2>
+                        <button class="btn btn-text btn-sm" id="btn-clear-logs">Clear</button>
+                    </div>
+                    <div class="log-content" id="log-list">
+                        <div class="log-item system"><span class="log-time">[System]</span> Aura-Guard initializing...</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="app-footer">
+            <p>Designed for AURA-GUARD Intelligent Driver Assistance. Connected to Backend API.</p>
+        </footer>
+    </div>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
